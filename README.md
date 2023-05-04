@@ -4,4 +4,4 @@ A multiplayer mod for Beton Brutal !
 
 
 
-A build of the mod is located in bin/Debug/BetonBrutalMulti.dll
+A build of the mod is available in the repo, named MultiMod.zip
