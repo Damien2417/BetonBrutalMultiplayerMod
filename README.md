@@ -1,6 +1,6 @@
 # Beton Brutal Multiplayer Mod
 
-A multiplayer mod for Brutal Multiplayer !
+A multiplayer mod for Beton Brutal !
 
 
 
