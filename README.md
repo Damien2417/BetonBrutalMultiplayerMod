@@ -1,6 +1,6 @@
 # Beton Brutal Multiplayer Mod
 
-A multiplayer mod for Subnautica Below Zero !
+A multiplayer mod for Brutal Multiplayer !
 
 
 
