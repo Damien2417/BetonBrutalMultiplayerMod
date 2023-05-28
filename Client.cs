@@ -16,6 +16,8 @@ public class Client
     private readonly Players _players;
     private bool _isSprinting = false;
     private bool _isSneaking = false;
+    private Thread receiveThread;
+
     public Client(string ipAddress, int port, string logFilePath, AssetBundle assetBundle, ClientThreadActionsManager mainThreadActionsManager)
     {
         _udpClient = new UdpClient();
@@ -35,11 +37,10 @@ public class Client
 
         IPAddress serverAddress = serverEndpoint.Address;
         int serverPort = serverEndpoint.Port;
-
         _logger.Log($"Client started, connecting to server at {serverEndpoint.Address}:{serverEndpoint.Port}");
 
         //Receive thread
-        Thread receiveThread = new Thread(() =>
+        receiveThread = new Thread(() =>
         {
             while (true)
             {
@@ -51,11 +52,11 @@ public class Client
                 }
                 catch (SocketException e)
                 {
-                    _logger.Log($"Receive thread SocketException: {e.Message}");
+                    _logger.Log($"Receiver thread SocketException: {e.Message}");
                 }
                 catch (Exception e)
                 {
-                    _logger.Log($"Receive thread Exception: {e.ToString()}");
+                    _logger.Log($"Receiver thread Exception: {e.ToString()}");
                 }
             }
         });
@@ -73,79 +74,105 @@ public class Client
             {
                 if (_playerPosition != previousPosition || _playerRotation != previousRotation)
                 {
-                    string method = "POSITION_UPDATE";
+                    string positionString = $"POSITION_UPDATE|{playerId}|{_playerPosition.x}|{_playerPosition.y - 0.8f}|{_playerPosition.z}|{_playerRotation.x}|{_playerRotation.y}|{_playerRotation.z}|{_playerRotation.w}|{_isSprinting}|{_isSneaking}";
+
                     if (!check)
                     {
-                        method = "ADD_PLAYER";
+                        positionString = $"ADD_PLAYER|{playerId}|{_playerPosition.x}|{_playerPosition.y - 0.8f}|{_playerPosition.z}";
                         check = true;
                     }
 
                     // Send player position and other updates to the server
-                    string positionString = $"{method}|{playerId}|{_playerPosition.x}|{_playerPosition.y - 0.8f}|{_playerPosition.z}|{_playerRotation.x}|{_playerRotation.y}|{_playerRotation.z}|{_playerRotation.w}|{_isSprinting}|{_isSneaking}";
                     byte[] data = Encoding.UTF8.GetBytes(positionString);
                     _udpClient.Send(data, data.Length, new IPEndPoint(serverAddress, serverPort));
-
-
-                    _logger.Log($"Sent {data.Length} bytes to {serverEndpoint.Address}:{serverEndpoint.Port}");
 
                     previousPosition = _playerPosition;
                     previousRotation = _playerRotation;
                 }
-                Thread.Sleep(20); // Adjust the sending interval as needed
+                Thread.Sleep(20);
             }
             catch (SocketException e)
             {
-                _logger.Log($"Send thread SocketException: {e.Message}");
+                _logger.Log($"Sender thread SocketException: {e.Message}");
             }
             catch (Exception e)
             {
-                _logger.Log($"Send thread Exception: {e.ToString()}");
+                _logger.Log($"Sender thread Exception: {e.ToString()}");
             }
         }
+
+        // Close resources
+        receiveThread?.Abort();
+        _udpClient?.Close();
     }
 
     void ProcessReceivedClientData(IPEndPoint sender, byte[] data)
     {
         string message = Encoding.UTF8.GetString(data);
         string[] parts = message.Split('|');
-        string logMessage = $"Received {parts[0]} for player {parts[1]} at ";
 
-        for (int i = 2; i < parts.Length; i++)
+        if (parts.Length < 2) // We expect at least a method and playerId
         {
-            logMessage += $"{parts[i]}";
-            if (i < parts.Length - 1)
-            {
-                logMessage += ",";
-            }
+            _logger.Log($"Invalid message received from server: {message}");
+            return;
         }
 
-        _logger.Log(logMessage);
-
-        switch (parts[0])
+        try
         {
-            case "POSITION_UPDATE":
-                int playerId = int.Parse(parts[1]);
-                float x = float.Parse(parts[2]);
-                float y = float.Parse(parts[3]);
-                float z = float.Parse(parts[4]);
-                Vector3 position = new Vector3(x, y, z);
-                Quaternion rotation = new Quaternion(float.Parse(parts[5]), float.Parse(parts[6]), float.Parse(parts[7]), float.Parse(parts[8]));
+            switch (parts[0])
+            {
+                case "POSITION_UPDATE":
+                    if (parts.Length != 11) // We expect exactly 11 parts for a "POSITION_UPDATE" message
+                    {
+                        _logger.Log($"Invalid POSITION_UPDATE message received from server: {message}");
+                        return;
+                    }
 
-                bool isSprinting = Convert.ToBoolean(parts[10]);
-                bool isSneaking = Convert.ToBoolean(parts[9]);
+                    int playerId = int.Parse(parts[1]);
+                    float x = float.Parse(parts[2]);
+                    float y = float.Parse(parts[3]);
+                    float z = float.Parse(parts[4]);
+                    Vector3 position = new Vector3(x, y, z);
+                    Quaternion rotation = new Quaternion(float.Parse(parts[5]), float.Parse(parts[6]), float.Parse(parts[7]), float.Parse(parts[8]));
 
-                _players.UpdatePlayerPosition(playerId, position, rotation, isSprinting, isSneaking);
-                break;
-            case "ADD_PLAYER":
-                int newPlayerId = int.Parse(parts[1]);
-                float newX = float.Parse(parts[2]);
-                float newY = float.Parse(parts[3]);
-                float newZ = float.Parse(parts[4]);
-                Vector3 newPosition = new Vector3(newX, newY, newZ);
+                    bool isSprinting = Convert.ToBoolean(parts[9]);
+                    bool isSneaking = Convert.ToBoolean(parts[10]);
 
-                _players.AddPlayer(newPlayerId, newPosition);
-                break;
-                // Handle other messages
+                    _players.UpdatePlayerPosition(playerId, position, rotation, isSprinting, isSneaking);
+                    break;
+
+                case "ADD_PLAYER":
+                    if (parts.Length != 5) // We expect exactly 5 parts for a "ADD_PLAYER" message
+                    {
+                        _logger.Log($"Invalid ADD_PLAYER message received from server: {message}");
+                        return;
+                    }
+                    _logger.Log($"Adding player");
+
+                    int newPlayerId = int.Parse(parts[1]);
+                    float newX = float.Parse(parts[2]);
+                    float newY = float.Parse(parts[3]);
+                    float newZ = float.Parse(parts[4]);
+                    Vector3 newPosition = new Vector3(newX, newY, newZ);
+
+                    _players.AddPlayer(newPlayerId, newPosition);
+                    break;
+                case "DELETE_PLAYER":
+                    if (parts.Length != 2) // We expect exactly 2 parts for a "DELETE_PLAYER" message
+                    {
+                        _logger.Log($"Invalid DELETE_PLAYER message received from server: {message}");
+                        return;
+                    }
+
+                    int deletePlayerId = int.Parse(parts[1]);
+                    _players.DeletePlayer(deletePlayerId);
+                    break;
+                    // Handle other messages
+            }
+        }
+        catch (FormatException fe)
+        {
+            _logger.Log($"Invalid message format from server: {fe.Message}");
         }
     }
 

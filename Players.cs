@@ -20,22 +20,16 @@ public class Players
     }
     public void AddPlayer(int playerId, Vector3 position)
     {
-        _logger.Log("Add player starting...");
         Action action = () =>
         {
-            _logger.Log("_players check...");
             if (!_players.ContainsKey(playerId))
             {
-                _logger.Log("LoadAsset check...");
                 if (_playerModel == null)
                 {
                     _logger.Log("Failed to load custom model!");
                 }
-                _logger.Log("asset loaded");
 
                 GameObject mymodel = UnityEngine.Object.Instantiate(_playerModel, position, Quaternion.identity) as GameObject;
-
-                _logger.Log("model instantiate");
 
                 Renderer renderer = mymodel.GetComponent<Renderer>();
                 if (renderer != null)
@@ -47,21 +41,10 @@ public class Players
                     }
                 }
 
-                // Access the Animator component
-                Animator animator = mymodel.GetComponent<Animator>();
-                if (animator != null && !animator.enabled)
-                {
-                    animator.enabled = true;
-                }
-                if (animator != null)
-                {
-                    animator.Play("BasicMotions@Idle01");
-                }
-
                 _players.Add(playerId, mymodel);
-                _logger.Log($"[Client] Add player at position {position}");
+                _logger.Log($"Add player at position {position}");
 
-                // Spawn a clone of the FlashlightAnchor and anchor it to the top of the cube
+                // Spawn a clone of the FlashlightAnchor and anchor it to the top of the model
                 GameObject flashlightAnchorPrefab = GameObject.Find("Flashlight");
                 GameObject newFlashlightAnchor = UnityEngine.Object.Instantiate(flashlightAnchorPrefab, mymodel.transform.position + Vector3.up, Quaternion.identity);
 
@@ -76,7 +59,7 @@ public class Players
     {
         Action action = () =>
         {
-            if (_players.ContainsKey(playerId))
+            if (_players.ContainsKey(playerId) && _players[playerId] != null)
             {
                 if (!_latestPlayerPositionsClient.ContainsKey(playerId))
                 {
@@ -94,26 +77,27 @@ public class Players
                 _players[playerId].transform.rotation = Quaternion.Euler(0, yRotation, 0);
 
                 // Find the head bone (B-head) and adjust its rotation.
-                Transform headBone = _players[playerId].transform.Find("B-head");
+                Transform headBone = _players[playerId].transform.Find("DummyRig/root/B-hips/B-spine/B-chest/B-upperChest/B-neck/B-head");
                 if (headBone != null)
                 {
-                    float xRotation = rotation.eulerAngles.x;
-                    float zRotation = rotation.eulerAngles.z;
-
-                    // Apply a slight rotation to the head bone.
-                    float headRotationFactor = 0.2f;
-                    _logger.Log(Quaternion.Euler(xRotation * headRotationFactor, 0, zRotation * headRotationFactor).ToString());
-                    headBone.localRotation = Quaternion.Euler(xRotation * headRotationFactor, 0, zRotation * headRotationFactor);
+                    float headVerticalRotation = rotation.eulerAngles.x;
+                    Quaternion headRotation = Quaternion.Euler(headVerticalRotation, 0, 0);
+                    headBone.localRotation = headRotation;
                 }
+                else
+                {
+                    _logger.Log($"Head bone not found for player {playerId}.");
+                }
+
                 UpdatePlayerAnimation(playerId, isSprinting, isSneaking);
             }
         };
         _mainThreadActionsManager.EnqueueAction(action);
     }
 
-    void UpdatePlayerAnimation(int playerId, bool isSneaking, bool isSprinting)
+    void UpdatePlayerAnimation(int playerId, bool isSprinting, bool isSneaking)
     {
-        if (_players.ContainsKey(playerId))
+        if (_players.ContainsKey(playerId) && _players[playerId] != null)
         {
             Vector3 currentPosition = _players[playerId].transform.position;
             Vector3 previousPosition;
@@ -133,6 +117,11 @@ public class Players
             Animator animator = _players[playerId].GetComponent<Animator>();
             float speed = 0f;
             float direction = 0f; // 0 means forward, 180 means backward
+            if (animator == null)
+            {
+                _logger.Log($"Animator not found for player {playerId}!");
+                return;
+            }
 
             if (!isGrounded && currentPosition.y > previousPosition.y)
             {
@@ -174,30 +163,27 @@ public class Players
         }
     }
 
-    private void PlayAnimation(int playerId, string animationParameter, bool value)
+    public void DeletePlayer(int playerId)
     {
-        if (_players.ContainsKey(playerId))
+        Action action = () =>
         {
-            Animator animator = _players[playerId].GetComponent<Animator>();
-
-            // Check if the requested animation is already playing
-            if (animator.GetBool(animationParameter) == value)
+            if (_players.ContainsKey(playerId) && _players[playerId] != null)
             {
-                return; // The animation is already playing, do nothing
+                // Destroy the GameObject associated with the player
+                GameObject playerObject = _players[playerId];
+                UnityEngine.Object.Destroy(playerObject);
+
+                // Remove the player from the dictionary
+                _players.Remove(playerId);
+
+                _logger.Log($"Player {playerId} has been removed.");
             }
-
-
-            // Reset all the animation parameters to false
-            foreach (AnimatorControllerParameter param in animator.parameters)
+            else
             {
-                if (param.type == AnimatorControllerParameterType.Bool)
-                {
-                    animator.SetBool(param.name, false);
-                }
+                _logger.Log($"Player {playerId} does not exist and cannot be removed.");
             }
-
-            // Set the desired animation parameter to the given value
-            animator.SetBool(animationParameter, value);
-        }
+        };
+        _mainThreadActionsManager.EnqueueAction(action);
     }
+
 }
