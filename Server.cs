@@ -69,12 +69,6 @@ public class Server
         }
     }
 
-    public void Stop()
-    {
-        _isRunning = false;
-        _logger.Log("Server stopping.");
-    }
-
 
     void ProcessReceivedDataServer(IPEndPoint sender, byte[] data)
     {
@@ -161,5 +155,24 @@ public class Server
                 _udpServer.Send(data, data.Length, peer);
             }
         }
+    }
+
+    // New method to get the top 5 players by Y position
+    public List<KeyValuePair<int, Vector3>> GetTop5PlayersByY()
+    {
+        List<KeyValuePair<int, Vector3>> top5Players = new List<KeyValuePair<int, Vector3>>(_latestPlayerPositions);
+        top5Players.Sort((a, b) => b.Value.y.CompareTo(a.Value.y)); // sort descending by Y position
+        if (top5Players.Count > 5)
+        {
+            top5Players.RemoveRange(5, top5Players.Count - 5); // keep only the top 5
+        }
+        return top5Players;
+    }
+
+
+    public void Stop()
+    {
+        _isRunning = false;
+        _logger.Log("Server stopping.");
     }
 }

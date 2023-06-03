@@ -11,6 +11,7 @@ public class Players
     private readonly Logger _logger;
     private readonly ClientThreadActionsManager _mainThreadActionsManager;
     private readonly GameObject _playerModel;
+
     public Players(Logger logger, ClientThreadActionsManager mainThreadActionsManager, GameObject model)
     {
         _logger = logger;
@@ -185,5 +186,8 @@ public class Players
         };
         _mainThreadActionsManager.EnqueueAction(action);
     }
-
+    public List<KeyValuePair<int, Vector3>> GetPlayers()
+    {
+        return new List<KeyValuePair<int, Vector3>>(_latestPlayerPositionsClient);
+    }
 }

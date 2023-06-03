@@ -1,9 +1,18 @@
 ﻿using HarmonyLib;
+using System.Collections;
+using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.UI;
-
 public static class Patcher
 {
+    private static GameObject leaderboardGO;
+    private static Text[] playerTexts;
+    public class PlayerData
+    {
+        public int playerId;
+        public float altitude;
+    }
+
     [HarmonyPatch(typeof(PlayerController))]
     [HarmonyPatch("Update")]
     public static class PlayerController_Update_Patch
@@ -21,9 +30,108 @@ public static class Patcher
 
                 client.SetPlayerSprinting(__instance.isSprinting);
                 client.SetPlayerSneaking(__instance.isSneaking);
+
+                UpdateLeaderboard();
             }
         }
     }
+
+    private static void CreateLeaderboardUI()
+    {
+        GameObject canvasGO = GameObject.Find("Canvas"); // Assuming the canvas is already present
+        if (canvasGO == null)
+        {
+            Debug.LogError("Canvas GameObject not found!");
+            return;
+        }
+
+        leaderboardGO = new GameObject("Leaderboard");
+        leaderboardGO.transform.parent = canvasGO.transform;
+        RectTransform leaderboardRect = leaderboardGO.AddComponent<RectTransform>();
+        leaderboardRect.anchorMin = new Vector2(1, 1);
+        leaderboardRect.anchorMax = new Vector2(1, 1);
+        leaderboardRect.pivot = new Vector2(1, 1);
+        leaderboardRect.anchoredPosition = new Vector2(-20, -200);
+        leaderboardRect.sizeDelta = new Vector2(200, 200);
+
+        playerTexts = new Text[5];
+
+        for (int i = 0; i < 5; i++)
+        {
+            GameObject playerTextGO = new GameObject("Player" + (i + 1));
+            playerTextGO.transform.parent = leaderboardGO.transform;
+            RectTransform playerTextRect = playerTextGO.AddComponent<RectTransform>();
+            playerTextRect.anchorMin = new Vector2(0, 1);
+            playerTextRect.anchorMax = new Vector2(1, 1);
+            playerTextRect.pivot = new Vector2(0.5f, 1);
+            playerTextRect.anchoredPosition = new Vector2(0, -40 * i);
+            playerTextRect.sizeDelta = new Vector2(0, 40);
+
+            Text playerTextComponent = playerTextGO.AddComponent<Text>();
+            playerTextComponent.font = Resources.GetBuiltinResource<Font>("Arial.ttf");
+            playerTextComponent.color = Color.white;
+            playerTextComponent.alignment = TextAnchor.MiddleRight;
+
+            // Add index to player text
+            GameObject indexGO = new GameObject("Index");
+            indexGO.transform.parent = playerTextGO.transform;
+            RectTransform indexRect = indexGO.AddComponent<RectTransform>();
+            indexRect.anchorMin = new Vector2(0, 0);
+            indexRect.anchorMax = new Vector2(0, 1);
+            indexRect.pivot = new Vector2(0, 0.5f);
+            indexRect.anchoredPosition = new Vector2(5, 0);
+            indexRect.sizeDelta = new Vector2(20, 0);
+
+            Text indexText = indexGO.AddComponent<Text>();
+            indexText.font = Resources.GetBuiltinResource<Font>("Arial.ttf");
+            indexText.color = Color.white;
+            indexText.alignment = TextAnchor.MiddleLeft;
+
+            playerTexts[i] = playerTextComponent;
+        }
+
+    }
+
+    private static List<PlayerData> playerDataList = new List<PlayerData>();
+
+    private static void UpdateLeaderboard()
+    {
+        if (leaderboardGO == null || playerTexts == null)
+            return;
+
+        Client client = MultiplayerManager.Instance?.client;
+        if (client == null)
+            return;
+
+        playerDataList.Clear();
+
+        List<KeyValuePair<int, Vector3>> topPlayers = client.getTop5Players();
+
+        for (int i = 0; i < topPlayers.Count; i++)
+        {
+            int playerId = topPlayers[i].Key;
+            float altitude = Mathf.Round(topPlayers[i].Value.y);
+
+            playerDataList.Add(new PlayerData { playerId = playerId, altitude = altitude });
+        }
+
+        playerDataList.Sort((a, b) => b.altitude.CompareTo(a.altitude)); // Sort the players based on altitude
+
+        for (int i = 0; i < playerTexts.Length; i++)
+        {
+            Text playerText = playerTexts[i];
+            if (i < playerDataList.Count)
+            {
+                PlayerData playerData = playerDataList[i];
+                playerText.text = "Player " + playerData.playerId + ": " + playerData.altitude + "m";
+            }
+            else
+            {
+                playerText.text = "";
+            }
+        }
+    }
+
 
     [HarmonyPatch(typeof(GameUI))]
     [HarmonyPatch("SwitchToScreen")]
@@ -34,16 +142,37 @@ public static class Patcher
         {
             if (screenName == "PauseMenu")
             {
-                if (GameUI_Start_Patch.canvasGO != null)
+                if (GameUI_Start_Patch.connectionMenu != null)
                 {
-                    GameUI_Start_Patch.canvasGO.SetActive(true);
                     GameUI_Start_Patch.ManageConnectionUI();
                 }
             }
             else // When we switch away from PauseMenu, we disable our menu
             {
-                if (GameUI_Start_Patch.canvasGO != null)
-                    GameUI_Start_Patch.canvasGO.SetActive(false);
+                if (GameUI_Start_Patch.connectionMenu != null)
+                    GameUI_Start_Patch.connectionMenu.SetActive(false);
+                if (GameUI_Start_Patch.disconnectionMenu != null)
+                    GameUI_Start_Patch.disconnectionMenu.SetActive(false);
+            }
+
+            if (screenName == "HUD")
+            {
+                if (leaderboardGO != null)
+                {
+                    leaderboardGO.SetActive(true);
+                }
+                else
+                {
+                    CreateLeaderboardUI();
+                    UpdateLeaderboard();
+                }
+            }
+            else
+            {
+                if (leaderboardGO != null)
+                {
+                    leaderboardGO.SetActive(false);
+                }
             }
         }
     }
@@ -54,7 +183,9 @@ public static class Patcher
     {
         public static GameObject canvasGO;
         public static GameObject connectionMenu;
+        public static GameObject disconnectionMenu;
         public static Button disconnectButton;
+        public static GameObject leaderboardGO;
 
         [HarmonyPostfix]
         public static void Postfix(GameUI __instance)
@@ -118,7 +249,7 @@ public static class Patcher
             });
 
             // Create a new Panel for Disconnection
-            GameObject disconnectionMenu = new GameObject("DisconnectionMenu");
+            disconnectionMenu = new GameObject("DisconnectionMenu");
             disconnectionMenu.transform.parent = canvasGO.transform;
             RectTransform disconnectionMenuRect = disconnectionMenu.AddComponent<RectTransform>();
             disconnectionMenuRect.anchorMin = new Vector2(1, 1);
@@ -151,7 +282,7 @@ public static class Patcher
         {
             bool isConnected = GameObject.FindObjectOfType<MultiplayerManager>() != null;
             connectionMenu.SetActive(!isConnected);
-            disconnectButton.gameObject.SetActive(isConnected);
+            disconnectionMenu.SetActive(isConnected);
         }
 
         public static InputField AddInputFieldToUI(GameObject parentObject, string inputFieldName, Vector2 anchoredPosition, string placeholderText)

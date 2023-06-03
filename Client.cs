@@ -4,6 +4,8 @@ using System.Net;
 using System.Text;
 using System.Threading;
 using UnityEngine;
+using System.Collections.Generic;
+using System.Linq;
 
 public class Client
 {
@@ -175,7 +177,6 @@ public class Client
                     int deletePlayerId = int.Parse(parts[1]);
                     _players.DeletePlayer(deletePlayerId);
                     break;
-                    // Handle other messages
             }
         }
         catch (FormatException fe)
@@ -212,4 +213,15 @@ public class Client
 
     }
 
+    public List<KeyValuePair<int, Vector3>>  getTop5Players()
+    {
+        List<KeyValuePair<int, Vector3>> players = _players.GetPlayers();
+        players.Add(new KeyValuePair<int, Vector3>(_playerId, _playerPosition));
+        players.Sort((a, b) => b.Value.y.CompareTo(a.Value.y)); // sort descending by Y position
+        if (players.Count > 5)
+        {
+            players.RemoveRange(5, players.Count - 5); // keep only the top 5
+        }
+        return players;
+    }
 }
