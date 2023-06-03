@@ -14,6 +14,7 @@ public class Server
     private readonly string _ipAddress;
     private readonly int _port;
     private const int MAX_CONNECTIONS = 100;
+    private bool _isRunning = true;
 
     public Server(string ipAddress, int port, string logFilePath)
     {
@@ -25,14 +26,16 @@ public class Server
         _port = port;
 
     }
+
     public void Start()
     {
         try
         {
+            _isRunning = true;
             IPEndPoint clientEndpoint = new IPEndPoint(IPAddress.Parse(_ipAddress), _port);
             _logger.Log($"Server started on  {clientEndpoint.Address} {clientEndpoint.Port}");
 
-            while (true)
+            while (_isRunning)
             {
                 try
                 {
@@ -65,6 +68,13 @@ public class Server
             _logger.Log("Server closed.");
         }
     }
+
+    public void Stop()
+    {
+        _isRunning = false;
+        _logger.Log("Server stopping.");
+    }
+
 
     void ProcessReceivedDataServer(IPEndPoint sender, byte[] data)
     {
@@ -116,6 +126,23 @@ public class Server
                     break;
                 case "ADD_PLAYER":
                     _logger.Log($"{message}");
+                    break;
+                case "DELETE_PLAYER":
+                    if (parts.Length != 2)
+                    {
+                        _logger.Log($"Invalid DELETE_PLAYER message received from {sender.Address}:{sender.Port}. Message: {String.Join(", ", parts)}");
+                        return;
+                    }
+                    int playerIdToDelete = int.Parse(parts[1]);
+                    if (_latestPlayerPositions.ContainsKey(playerIdToDelete))
+                    {
+                        _latestPlayerPositions.Remove(playerIdToDelete);
+                        _logger.Log($"Player {playerIdToDelete} removed from the game");
+                    }
+                    else
+                    {
+                        _logger.Log($"DELETE_PLAYER received for a non-existent player id: {playerIdToDelete}");
+                    }
                     break;
             }
         }

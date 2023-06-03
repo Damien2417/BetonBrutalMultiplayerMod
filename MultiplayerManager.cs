@@ -3,13 +3,15 @@ using System;
 using System.IO;
 using System.Threading;
 using UnityEngine;
-using UnityEngine.SceneManagement;
 
 public class MultiplayerManager : MonoBehaviour
 {
     public static MultiplayerManager Instance { get; private set; }
     public Client client { get; private set; }
     private Server server;
+    private string _ipAddress;
+    private int _port;
+    private bool _isHost;
 
     private Thread _serverThread;
     private Thread _clientThread;
@@ -19,6 +21,15 @@ public class MultiplayerManager : MonoBehaviour
     private AssetBundle assetBundle;
     private string bepinexModPath;
     private ClientThreadActionsManager mainThreadActionsManager;
+    
+    public void Initialize(string ipAddress, int port, bool isHost)
+    {
+        _ipAddress = ipAddress;
+        _isHost = isHost;
+        _port = port;
+        go();
+    }
+
     private void Awake()
     {
         Debug.Log("MultiplayerManager Awake");
@@ -27,30 +38,26 @@ public class MultiplayerManager : MonoBehaviour
             Destroy(this.gameObject);
             return;
         }
-
         Instance = this;
     }
 
-
-
-    void Start()
+    void go()
     {
         Debug.Log("MultiplayerManager Start");
         bepinexModPath = Path.Combine(Paths.PluginPath, "MultiMod");
 
-        NetworkConfig networkConfig = NetworkConfig.Load(Path.Combine(bepinexModPath, "network_config.json"));
         assetBundle = LoadAssetBundle(Path.Combine(bepinexModPath, "playerprefab"));
 
         mainThreadActionsManager = new ClientThreadActionsManager();
 
-        if (networkConfig.isHost)
+        if (_isHost)
         {
-            server = new Server(networkConfig.serverIpAddress, networkConfig.serverPort, Path.Combine(bepinexModPath, $"server_debug_{instanceId}.log"));
+            server = new Server(_ipAddress, _port, Path.Combine(bepinexModPath, $"server_debug_{instanceId}.log"));
             _serverThread = new Thread(() => server.Start());
             _serverThread.Start();
         }
 
-        client = new Client(networkConfig.serverIpAddress, networkConfig.serverPort, Path.Combine(bepinexModPath, $"client_debug_{instanceId}.log"), assetBundle, mainThreadActionsManager);
+        client = new Client(_ipAddress, _port, Path.Combine(bepinexModPath, $"client_debug_{instanceId}.log"), assetBundle, mainThreadActionsManager);
         _clientThread = new Thread(() => client.Start());
         _clientThread.Start();
     }
@@ -83,4 +90,41 @@ public class MultiplayerManager : MonoBehaviour
         }
         return bundle;
     }
+
+    public void Disconnect()
+    {
+        if (client != null)
+        {
+            client.Disconnect();
+            client = null;
+        }
+
+        if (server != null)
+        {
+            server.Stop();
+            server = null;
+        }
+
+        if (_serverThread != null && _serverThread.IsAlive)
+        {
+            _serverThread.Interrupt();
+            _serverThread = null;
+        }
+
+        if (_clientThread != null && _clientThread.IsAlive)
+        {
+            _clientThread.Interrupt();
+            _clientThread = null;
+        }
+
+        // Unload the asset bundle, including all its assets
+        if (assetBundle != null)
+        {
+            assetBundle.Unload(true);
+            assetBundle = null;
+        }
+
+        Debug.Log("Disconnected from the server.");
+    }
+
 }

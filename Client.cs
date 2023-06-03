@@ -17,7 +17,8 @@ public class Client
     private bool _isSprinting = false;
     private bool _isSneaking = false;
     private Thread receiveThread;
-
+    private bool _isRunning = true;
+    private int _playerId;
     public Client(string ipAddress, int port, string logFilePath, AssetBundle assetBundle, ClientThreadActionsManager mainThreadActionsManager)
     {
         _udpClient = new UdpClient();
@@ -32,6 +33,8 @@ public class Client
     }
     public void Start()
     {
+        _isRunning = true;
+
         IPEndPoint serverEndpoint = new IPEndPoint(IPAddress.Parse(_ipAddress), _port);
         _udpClient.Client.Bind(new IPEndPoint(IPAddress.Any, 0));
 
@@ -42,7 +45,7 @@ public class Client
         //Receive thread
         receiveThread = new Thread(() =>
         {
-            while (true)
+            while (_isRunning)
             {
                 try
                 {
@@ -62,48 +65,53 @@ public class Client
         });
         receiveThread.Start();
 
-        int playerId = UnityEngine.Random.Range(0, 1000000);
+        _playerId = UnityEngine.Random.Range(0, 1000000);
         Vector3 previousPosition = _playerPosition;
         Quaternion previousRotation = _playerRotation;
         bool check = false;
 
-        //Send thread
-        while (true)
+        // Send thread
+        Thread sendThread = new Thread(() =>
         {
-            try
+            while (_isRunning)
             {
-                if (_playerPosition != previousPosition || _playerRotation != previousRotation)
+                try
                 {
-                    string positionString = $"POSITION_UPDATE|{playerId}|{_playerPosition.x}|{_playerPosition.y - 0.8f}|{_playerPosition.z}|{_playerRotation.x}|{_playerRotation.y}|{_playerRotation.z}|{_playerRotation.w}|{_isSprinting}|{_isSneaking}";
-
-                    if (!check)
+                    if (_playerPosition != previousPosition || _playerRotation != previousRotation)
                     {
-                        positionString = $"ADD_PLAYER|{playerId}|{_playerPosition.x}|{_playerPosition.y - 0.8f}|{_playerPosition.z}";
-                        check = true;
+                        string positionString = $"POSITION_UPDATE|{_playerId}|{_playerPosition.x}|{_playerPosition.y - 0.8f}|{_playerPosition.z}|{_playerRotation.x}|{_playerRotation.y}|{_playerRotation.z}|{_playerRotation.w}|{_isSprinting}|{_isSneaking}";
+
+                        if (!check)
+                        {
+                            positionString = $"ADD_PLAYER|{_playerId}|{_playerPosition.x}|{_playerPosition.y - 0.8f}|{_playerPosition.z}";
+                            check = true;
+                        }
+
+                        byte[] data = Encoding.UTF8.GetBytes(positionString);
+                        _udpClient.Send(data, data.Length, new IPEndPoint(serverAddress, serverPort));
+
+                        previousPosition = _playerPosition;
+                        previousRotation = _playerRotation;
                     }
-
-                    // Send player position and other updates to the server
-                    byte[] data = Encoding.UTF8.GetBytes(positionString);
-                    _udpClient.Send(data, data.Length, new IPEndPoint(serverAddress, serverPort));
-
-                    previousPosition = _playerPosition;
-                    previousRotation = _playerRotation;
+                    Thread.Sleep(20);
                 }
-                Thread.Sleep(20);
+                catch (SocketException e)
+                {
+                    _logger.Log($"Sender thread SocketException: {e.Message}");
+                }
+                catch (Exception e)
+                {
+                    _logger.Log($"Sender thread Exception: {e.ToString()}");
+                }
             }
-            catch (SocketException e)
-            {
-                _logger.Log($"Sender thread SocketException: {e.Message}");
-            }
-            catch (Exception e)
-            {
-                _logger.Log($"Sender thread Exception: {e.ToString()}");
-            }
-        }
+        });
+        sendThread.Start();
 
-        // Close resources
-        receiveThread?.Abort();
+        // Wait for the threads to finish before closing resources
+        receiveThread.Join();
+        sendThread.Join();
         _udpClient?.Close();
+        _logger.Log("Client stopped.");
     }
 
     void ProcessReceivedClientData(IPEndPoint sender, byte[] data)
@@ -191,4 +199,17 @@ public class Client
     {
         _isSneaking = isSneaking;
     }
+
+    public void Disconnect()
+    {
+        string disconnectMessage = $"DELETE_PLAYER|{_playerId}";
+        byte[] data = Encoding.UTF8.GetBytes(disconnectMessage);
+        _udpClient.Send(data, data.Length, new IPEndPoint(IPAddress.Parse(_ipAddress), _port));
+        _logger.Log("Delete player message sent to the server.");
+
+        _isRunning = false;
+        _logger.Log("Client disconnecting...");
+
+    }
+
 }
