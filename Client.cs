@@ -13,6 +13,7 @@ public class Client
     private readonly UdpClient _udpClient;
     private readonly string _ipAddress;
     private readonly int _port;
+    private readonly string _playerName;
     private Vector3 _playerPosition;
     private Quaternion _playerRotation;
     private readonly Players _players;
@@ -20,8 +21,7 @@ public class Client
     private bool _isSneaking = false;
     private Thread receiveThread;
     private bool _isRunning = true;
-    private int _playerId;
-    public Client(string ipAddress, int port, string logFilePath, AssetBundle assetBundle, ClientThreadActionsManager mainThreadActionsManager)
+    public Client(string ipAddress, int port, string name, string logFilePath, AssetBundle assetBundle, ClientThreadActionsManager mainThreadActionsManager)
     {
         _udpClient = new UdpClient();
 
@@ -29,9 +29,9 @@ public class Client
 
         _ipAddress = ipAddress;
         _port = port;
+        _playerName =  name;
 
         _players = new Players(_logger, mainThreadActionsManager, assetBundle.LoadAsset<GameObject>("playerprefab"));
-
     }
     public void Start()
     {
@@ -67,7 +67,6 @@ public class Client
         });
         receiveThread.Start();
 
-        _playerId = UnityEngine.Random.Range(0, 1000000);
         Vector3 previousPosition = _playerPosition;
         Quaternion previousRotation = _playerRotation;
         bool check = false;
@@ -81,11 +80,11 @@ public class Client
                 {
                     if (_playerPosition != previousPosition || _playerRotation != previousRotation)
                     {
-                        string positionString = $"POSITION_UPDATE|{_playerId}|{_playerPosition.x}|{_playerPosition.y - 0.8f}|{_playerPosition.z}|{_playerRotation.x}|{_playerRotation.y}|{_playerRotation.z}|{_playerRotation.w}|{_isSprinting}|{_isSneaking}";
+                        string positionString = $"POSITION_UPDATE|{_playerName}|{_playerPosition.x}|{_playerPosition.y - 0.8f}|{_playerPosition.z}|{_playerRotation.x}|{_playerRotation.y}|{_playerRotation.z}|{_playerRotation.w}|{_isSprinting}|{_isSneaking}";
 
                         if (!check)
                         {
-                            positionString = $"ADD_PLAYER|{_playerId}|{_playerPosition.x}|{_playerPosition.y - 0.8f}|{_playerPosition.z}";
+                            positionString = $"ADD_PLAYER|{_playerName}|{_playerPosition.x}|{_playerPosition.y - 0.8f}|{_playerPosition.z}";
                             check = true;
                         }
 
@@ -138,7 +137,7 @@ public class Client
                         return;
                     }
 
-                    int playerId = int.Parse(parts[1]);
+                    string playerName = parts[1];
                     float x = float.Parse(parts[2]);
                     float y = float.Parse(parts[3]);
                     float z = float.Parse(parts[4]);
@@ -148,7 +147,7 @@ public class Client
                     bool isSprinting = Convert.ToBoolean(parts[9]);
                     bool isSneaking = Convert.ToBoolean(parts[10]);
 
-                    _players.UpdatePlayerPosition(playerId, position, rotation, isSprinting, isSneaking);
+                    _players.UpdatePlayerPosition(playerName, position, rotation, isSprinting, isSneaking);
                     break;
 
                 case "ADD_PLAYER":
@@ -159,13 +158,13 @@ public class Client
                     }
                     _logger.Log($"Adding player");
 
-                    int newPlayerId = int.Parse(parts[1]);
+                    string newPlayerName = parts[1];
                     float newX = float.Parse(parts[2]);
                     float newY = float.Parse(parts[3]);
                     float newZ = float.Parse(parts[4]);
                     Vector3 newPosition = new Vector3(newX, newY, newZ);
 
-                    _players.AddPlayer(newPlayerId, newPosition);
+                    _players.AddPlayer(newPlayerName, newPosition);
                     break;
                 case "DELETE_PLAYER":
                     if (parts.Length != 2) // We expect exactly 2 parts for a "DELETE_PLAYER" message
@@ -174,8 +173,8 @@ public class Client
                         return;
                     }
 
-                    int deletePlayerId = int.Parse(parts[1]);
-                    _players.DeletePlayer(deletePlayerId);
+                    string deletePlayerName = parts[1];
+                    _players.DeletePlayer(deletePlayerName);
                     break;
             }
         }
@@ -203,20 +202,36 @@ public class Client
 
     public void Disconnect()
     {
-        string disconnectMessage = $"DELETE_PLAYER|{_playerId}";
+        string disconnectMessage = $"DELETE_PLAYER|{_playerName}";
         byte[] data = Encoding.UTF8.GetBytes(disconnectMessage);
         _udpClient.Send(data, data.Length, new IPEndPoint(IPAddress.Parse(_ipAddress), _port));
         _logger.Log("Delete player message sent to the server.");
 
         _isRunning = false;
         _logger.Log("Client disconnecting...");
+        // Find the object by its script type
+        Canvas canvas = GameObject.FindObjectOfType<Canvas>();
+
+        // Check if the object was found
+        if (canvas != null)
+        {
+            Transform leaderboard = canvas.transform.Find("Leaderboard");
+
+            // Check if the Leaderboard child object was found
+            if (leaderboard != null)
+            {
+                // Destroy the Leaderboard object
+                GameObject.Destroy(leaderboard.gameObject);
+            }
+        }
+
 
     }
 
-    public List<KeyValuePair<int, Vector3>>  getTop5Players()
+    public List<KeyValuePair<string, Vector3>>  getTop5Players()
     {
-        List<KeyValuePair<int, Vector3>> players = _players.GetPlayers();
-        players.Add(new KeyValuePair<int, Vector3>(_playerId, _playerPosition));
+        List<KeyValuePair<string, Vector3>> players = _players.GetPlayers();
+        players.Add(new KeyValuePair<string, Vector3>(_playerName, _playerPosition));
         players.Sort((a, b) => b.Value.y.CompareTo(a.Value.y)); // sort descending by Y position
         if (players.Count > 5)
         {

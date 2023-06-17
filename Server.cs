@@ -10,7 +10,7 @@ public class Server
     private readonly Logger _logger;
     private readonly UdpClient _udpServer;
     private List<IPEndPoint> _peers;
-    private Dictionary<int, Vector3> _latestPlayerPositions;
+    private Dictionary<string, Vector3> _latestPlayerPositions;
     private readonly string _ipAddress;
     private readonly int _port;
     private const int MAX_CONNECTIONS = 100;
@@ -19,7 +19,7 @@ public class Server
     public Server(string ipAddress, int port, string logFilePath)
     {
         _peers = new List<IPEndPoint>();
-        _latestPlayerPositions = new Dictionary<int, Vector3>();
+        _latestPlayerPositions = new Dictionary<string, Vector3>();
         _udpServer = new UdpClient(port);
         _logger = new Logger("[Server]", logFilePath);
         _ipAddress = ipAddress;
@@ -84,7 +84,7 @@ public class Server
             // Send latest positions to the new player
             foreach (var player in _latestPlayerPositions)
             {
-                if (player.Key != Int32.Parse(parts[1]))
+                if (player.Key != parts[1])
                 {
                     string positionString = $"ADD_PLAYER|{player.Key}|{player.Value.x}|{player.Value.y}|{player.Value.z}";
                     byte[] data2 = Encoding.UTF8.GetBytes(positionString);
@@ -103,19 +103,19 @@ public class Server
                         _logger.Log($"Invalid message received from {sender.Address}:{sender.Port}, message: {String.Join(", ", parts)}");
                         return;
                     }
-                    int playerId = int.Parse(parts[1]);
+                    string playerName = parts[1];
                     float x = float.Parse(parts[2]);
                     float y = float.Parse(parts[3]);
                     float z = float.Parse(parts[4]);
                     Vector3 position = new Vector3(x, y, z);
 
-                    if (!_latestPlayerPositions.ContainsKey(playerId))
+                    if (!_latestPlayerPositions.ContainsKey(playerName))
                     {
-                        _latestPlayerPositions.Add(playerId, position);
+                        _latestPlayerPositions.Add(playerName, position);
                     }
                     else
                     {
-                        _latestPlayerPositions[playerId] = position;
+                        _latestPlayerPositions[playerName] = position;
                     }
                     break;
                 case "ADD_PLAYER":
@@ -127,15 +127,15 @@ public class Server
                         _logger.Log($"Invalid DELETE_PLAYER message received from {sender.Address}:{sender.Port}. Message: {String.Join(", ", parts)}");
                         return;
                     }
-                    int playerIdToDelete = int.Parse(parts[1]);
-                    if (_latestPlayerPositions.ContainsKey(playerIdToDelete))
+                    string playerNameToDelete = parts[1];
+                    if (_latestPlayerPositions.ContainsKey(playerNameToDelete))
                     {
-                        _latestPlayerPositions.Remove(playerIdToDelete);
-                        _logger.Log($"Player {playerIdToDelete} removed from the game");
+                        _latestPlayerPositions.Remove(playerNameToDelete);
+                        _logger.Log($"Player {playerNameToDelete} removed from the game");
                     }
                     else
                     {
-                        _logger.Log($"DELETE_PLAYER received for a non-existent player id: {playerIdToDelete}");
+                        _logger.Log($"DELETE_PLAYER received for a non-existent player id: {playerNameToDelete}");
                     }
                     break;
             }
@@ -158,9 +158,9 @@ public class Server
     }
 
     // New method to get the top 5 players by Y position
-    public List<KeyValuePair<int, Vector3>> GetTop5PlayersByY()
+    public List<KeyValuePair<string, Vector3>> GetTop5PlayersByY()
     {
-        List<KeyValuePair<int, Vector3>> top5Players = new List<KeyValuePair<int, Vector3>>(_latestPlayerPositions);
+        List<KeyValuePair<string, Vector3>> top5Players = new List<KeyValuePair<string, Vector3>>(_latestPlayerPositions);
         top5Players.Sort((a, b) => b.Value.y.CompareTo(a.Value.y)); // sort descending by Y position
         if (top5Players.Count > 5)
         {

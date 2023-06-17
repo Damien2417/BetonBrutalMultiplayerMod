@@ -103,7 +103,6 @@
     <Compile Include="Logger.cs" />
     <Compile Include="ClientThreadActionsManager.cs" />
     <Compile Include="Mod.cs" />
-    <Compile Include="NetworkConfig.cs" />
     <Compile Include="MultiplayerManager.cs" />
     <Compile Include="Patcher\Patcher.cs" />
     <Compile Include="Players.cs" />

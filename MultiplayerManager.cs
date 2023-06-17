@@ -2,6 +2,7 @@
 using System;
 using System.IO;
 using System.Threading;
+using System.Xml.Linq;
 using UnityEngine;
 
 public class MultiplayerManager : MonoBehaviour
@@ -11,6 +12,7 @@ public class MultiplayerManager : MonoBehaviour
     private Server server;
     private string _ipAddress;
     private int _port;
+    private string _name;
     private bool _isHost;
 
     private Thread _serverThread;
@@ -22,11 +24,12 @@ public class MultiplayerManager : MonoBehaviour
     private string bepinexModPath;
     private ClientThreadActionsManager mainThreadActionsManager;
     
-    public void Initialize(string ipAddress, int port, bool isHost)
+    public void Initialize(string ipAddress, int port, bool isHost, string name)
     {
         _ipAddress = ipAddress;
         _isHost = isHost;
         _port = port;
+        _name = name;
         go();
     }
 
@@ -57,7 +60,7 @@ public class MultiplayerManager : MonoBehaviour
             _serverThread.Start();
         }
 
-        client = new Client(_ipAddress, _port, Path.Combine(bepinexModPath, $"client_debug_{instanceId}.log"), assetBundle, mainThreadActionsManager);
+        client = new Client(_ipAddress, _port, _name, Path.Combine(bepinexModPath, $"client_debug_{instanceId}.log"), assetBundle, mainThreadActionsManager);
         _clientThread = new Thread(() => client.Start());
         _clientThread.Start();
     }

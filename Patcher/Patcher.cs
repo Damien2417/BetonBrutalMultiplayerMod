@@ -9,7 +9,7 @@ public static class Patcher
     private static Text[] playerTexts;
     public class PlayerData
     {
-        public int playerId;
+        public string playerName;
         public float altitude;
     }
 
@@ -105,14 +105,14 @@ public static class Patcher
 
         playerDataList.Clear();
 
-        List<KeyValuePair<int, Vector3>> topPlayers = client.getTop5Players();
+        List<KeyValuePair<string, Vector3>> topPlayers = client.getTop5Players();
 
         for (int i = 0; i < topPlayers.Count; i++)
         {
-            int playerId = topPlayers[i].Key;
+            string playerName = topPlayers[i].Key;
             float altitude = Mathf.Round(topPlayers[i].Value.y);
 
-            playerDataList.Add(new PlayerData { playerId = playerId, altitude = altitude });
+            playerDataList.Add(new PlayerData { playerName = playerName, altitude = altitude });
         }
 
         playerDataList.Sort((a, b) => b.altitude.CompareTo(a.altitude)); // Sort the players based on altitude
@@ -123,7 +123,7 @@ public static class Patcher
             if (i < playerDataList.Count)
             {
                 PlayerData playerData = playerDataList[i];
-                playerText.text = "Player " + playerData.playerId + ": " + playerData.altitude + "m";
+                playerText.text = playerData.playerName + ": " + playerData.altitude + "m";
             }
             else
             {
@@ -214,11 +214,14 @@ public static class Patcher
             // Create an Input Field under the Panel for Port input
             InputField portInputField = AddInputFieldToUI(connectionMenu, "PortInputField", new Vector2(-10, -50), "Enter Port...");
 
+            // Create an Input Field under the Panel for Port input
+            InputField nameInputField = AddInputFieldToUI(connectionMenu, "NameInputField", new Vector2(-10, -90), "Enter name...");
+
             // Add Connect Button
-            Button connectButton = AddButtonToUI(connectionMenu, "ConnectButton", new Vector2(-10, -130), "Connect");
+            Button connectButton = AddButtonToUI(connectionMenu, "ConnectButton", new Vector2(-10, -170), "Connect");
 
             // Add IsHost CheckBox
-            Toggle isHostToggle = AddToggleToUI(connectionMenu, "IsHostToggle", new Vector2(-10, -90), "Host");
+            Toggle isHostToggle = AddToggleToUI(connectionMenu, "IsHostToggle", new Vector2(-10, -130), "Host");
             RectTransform toggleRect = isHostToggle.GetComponent<RectTransform>();
             toggleRect.sizeDelta = new Vector2(70, 30);
             toggleRect.anchorMin = new Vector2(0.5f, 1);
@@ -236,13 +239,14 @@ public static class Patcher
                 Debug.Log("Connect Button clicked!");
                 Debug.Log("Entered IP: " + ipInputField.text);
                 Debug.Log("Entered Port: " + portInputField.text);
+                Debug.Log("Entered Name: " + nameInputField.text);
                 Debug.Log("Is host: " + isHostToggle.isOn);
 
                 if (GameObject.FindObjectOfType<MultiplayerManager>() == null)
                 {
                     GameObject multiplayerManager = new GameObject("MultiplayerManager");
                     MultiplayerManager managerComponent = multiplayerManager.AddComponent<MultiplayerManager>();
-                    managerComponent.Initialize(ipInputField.text, int.Parse(portInputField.text), isHostToggle.isOn);
+                    managerComponent.Initialize(ipInputField.text, int.Parse(portInputField.text), isHostToggle.isOn, nameInputField.text);
                     ManageConnectionUI();
                     Canvas.ForceUpdateCanvases();
                 }
@@ -365,11 +369,8 @@ public static class Patcher
             // Add a child GameObject for the checkmark
             GameObject checkmarkGO = new GameObject("Checkmark");
             checkmarkGO.transform.parent = toggleGO.transform;
-            Image checkmarkImage = checkmarkGO.AddComponent<Image>();
-            checkmarkImage.sprite = Resources.GetBuiltinResource<Sprite>("UI/Skin/Checkmark");
 
             toggle.targetGraphic = toggleBackgroundImage;
-            toggle.graphic = checkmarkImage;
 
             Text toggleTextComponent = AddTextToUI(toggleGO, toggleText);
             toggleTextComponent.alignment = TextAnchor.MiddleLeft;

@@ -3,11 +3,12 @@ using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
 using UnityEngine;
+using UnityEngine.UI;
 
 public class Players
 {
-    private readonly Dictionary<int, GameObject> _players;
-    private readonly Dictionary<int, Vector3> _latestPlayerPositionsClient = new Dictionary<int, Vector3>();
+    private readonly Dictionary<string, GameObject> _players;
+    private readonly Dictionary<string, Vector3> _latestPlayerPositionsClient = new Dictionary<string, Vector3>();
     private readonly Logger _logger;
     private readonly ClientThreadActionsManager _mainThreadActionsManager;
     private readonly GameObject _playerModel;
@@ -16,14 +17,14 @@ public class Players
     {
         _logger = logger;
         _mainThreadActionsManager = mainThreadActionsManager;
-        _players = new Dictionary<int, GameObject>();
+        _players = new Dictionary<string, GameObject>();
         _playerModel = model;
     }
-    public void AddPlayer(int playerId, Vector3 position)
+    public void AddPlayer(string playerName, Vector3 position)
     {
         Action action = () =>
         {
-            if (!_players.ContainsKey(playerId))
+            if (!_players.ContainsKey(playerName))
             {
                 if (_playerModel == null)
                 {
@@ -42,7 +43,7 @@ public class Players
                     }
                 }
 
-                _players.Add(playerId, mymodel);
+                _players.Add(playerName, mymodel);
                 _logger.Log($"Add player at position {position}");
 
                 // Spawn a clone of the FlashlightAnchor and anchor it to the top of the model
@@ -56,29 +57,29 @@ public class Players
         _mainThreadActionsManager.EnqueueAction(action);
     }
 
-    public void UpdatePlayerPosition(int playerId, Vector3 position, Quaternion rotation, bool isSprinting, bool isSneaking)
+    public void UpdatePlayerPosition(string playerName, Vector3 position, Quaternion rotation, bool isSprinting, bool isSneaking)
     {
         Action action = () =>
         {
-            if (_players.ContainsKey(playerId) && _players[playerId] != null)
+            if (_players.ContainsKey(playerName) && _players[playerName] != null)
             {
-                if (!_latestPlayerPositionsClient.ContainsKey(playerId))
+                if (!_latestPlayerPositionsClient.ContainsKey(playerName))
                 {
-                    _latestPlayerPositionsClient.Add(playerId, _players[playerId].transform.position);
+                    _latestPlayerPositionsClient.Add(playerName, _players[playerName].transform.position);
                 }
                 else
                 {
-                    _latestPlayerPositionsClient[playerId] = _players[playerId].transform.position;
+                    _latestPlayerPositionsClient[playerName] = _players[playerName].transform.position;
                 }
 
-                _players[playerId].transform.position = position;
+                _players[playerName].transform.position = position;
 
                 // Lock the prefab rotation on the up and down axis, and keep the rotation on the left and right axis.
                 float yRotation = rotation.eulerAngles.y;
-                _players[playerId].transform.rotation = Quaternion.Euler(0, yRotation, 0);
+                _players[playerName].transform.rotation = Quaternion.Euler(0, yRotation, 0);
 
                 // Find the head bone (B-head) and adjust its rotation.
-                Transform headBone = _players[playerId].transform.Find("DummyRig/root/B-hips/B-spine/B-chest/B-upperChest/B-neck/B-head");
+                Transform headBone = _players[playerName].transform.Find("DummyRig/root/B-hips/B-spine/B-chest/B-upperChest/B-neck/B-head");
                 if (headBone != null)
                 {
                     float headVerticalRotation = rotation.eulerAngles.x;
@@ -87,25 +88,68 @@ public class Players
                 }
                 else
                 {
-                    _logger.Log($"Head bone not found for player {playerId}.");
+                    _logger.Log($"Head bone not found for player {playerName}.");
                 }
 
-                UpdatePlayerAnimation(playerId, isSprinting, isSneaking);
+                
+                // Raycast from camera to player
+                RaycastHit hit;
+                GameObject selfCam = GameObject.Find("PlayerController/Main Camera");
+                GameObject canvasBeacon = _players[playerName].transform.Find("Canvas").gameObject;
+                Transform canvas = canvasBeacon.transform.Find("playerName");
+                Text playerNameText = canvas.GetComponentInChildren<Text>();
+                GameObject rawImage = canvasBeacon.transform.Find("RawImage").gameObject;
+
+                
+                if (selfCam == null)
+                {
+                    _logger.Log($"Self cam not found");
+                }
+                else if (canvasBeacon == null)
+                {
+                    _logger.Log($"canvasBeacon not found");
+                }
+                else if (rawImage == null)
+                {
+                    _logger.Log($"rawImage not found");
+                }
+                else
+                {
+                    if (Physics.Raycast(selfCam.transform.position, (_players[playerName].transform.position - selfCam.transform.position).normalized, out hit))
+                    {
+                        if (hit.transform == _players[playerName].transform)
+                        {
+                            // If the player was hit by the raycast, disable the marker
+                            rawImage.SetActive(false);
+                        }
+                        else
+                        {
+                            // If something else was hit, enable the marker
+                            rawImage.SetActive(true);
+                        }
+                    }
+                    playerNameText.text = playerName;
+
+                }
+                
+
+
+                UpdatePlayerAnimation(playerName, isSprinting, isSneaking);
             }
         };
         _mainThreadActionsManager.EnqueueAction(action);
     }
 
-    void UpdatePlayerAnimation(int playerId, bool isSprinting, bool isSneaking)
+    void UpdatePlayerAnimation(string playerName, bool isSprinting, bool isSneaking)
     {
-        if (_players.ContainsKey(playerId) && _players[playerId] != null)
+        if (_players.ContainsKey(playerName) && _players[playerName] != null)
         {
-            Vector3 currentPosition = _players[playerId].transform.position;
+            Vector3 currentPosition = _players[playerName].transform.position;
             Vector3 previousPosition;
 
-            if (_latestPlayerPositionsClient.ContainsKey(playerId))
+            if (_latestPlayerPositionsClient.ContainsKey(playerName))
             {
-                previousPosition = _latestPlayerPositionsClient[playerId];
+                previousPosition = _latestPlayerPositionsClient[playerName];
             }
             else
             {
@@ -115,12 +159,12 @@ public class Players
             RaycastHit hit;
             bool isGrounded = Physics.Raycast(currentPosition, Vector3.down, out hit, 0.1f);
 
-            Animator animator = _players[playerId].GetComponent<Animator>();
+            Animator animator = _players[playerName].GetComponent<Animator>();
             float speed = 0f;
             float direction = 0f; // 0 means forward, 180 means backward
             if (animator == null)
             {
-                _logger.Log($"Animator not found for player {playerId}!");
+                _logger.Log($"Animator not found for player {playerName}!");
                 return;
             }
 
@@ -136,7 +180,7 @@ public class Players
             {
                 // Calculate the speed and direction based on the distance moved
                 Vector3 movementVector = (currentPosition - previousPosition).normalized;
-                float angle = Vector3.Angle(_players[playerId].transform.forward, movementVector);
+                float angle = Vector3.Angle(_players[playerName].transform.forward, movementVector);
 
                 float distanceMoved = Vector3.Distance(currentPosition, previousPosition);
                 if (distanceMoved > 0.001f) // Use Mathf.Epsilon to account for floating-point inaccuracies
@@ -164,30 +208,31 @@ public class Players
         }
     }
 
-    public void DeletePlayer(int playerId)
+    public void DeletePlayer(string playerName)
     {
         Action action = () =>
         {
-            if (_players.ContainsKey(playerId) && _players[playerId] != null)
+            if (_players.ContainsKey(playerName) && _players[playerName] != null)
             {
                 // Destroy the GameObject associated with the player
-                GameObject playerObject = _players[playerId];
+                GameObject playerObject = _players[playerName];
                 UnityEngine.Object.Destroy(playerObject);
 
                 // Remove the player from the dictionary
-                _players.Remove(playerId);
+                _players.Remove(playerName);
+                _latestPlayerPositionsClient.Remove(playerName);
 
-                _logger.Log($"Player {playerId} has been removed.");
+                _logger.Log($"Player {playerName} has been removed.");
             }
             else
             {
-                _logger.Log($"Player {playerId} does not exist and cannot be removed.");
+                _logger.Log($"Player {playerName} does not exist and cannot be removed.");
             }
         };
         _mainThreadActionsManager.EnqueueAction(action);
     }
-    public List<KeyValuePair<int, Vector3>> GetPlayers()
+    public List<KeyValuePair<string, Vector3>> GetPlayers()
     {
-        return new List<KeyValuePair<int, Vector3>>(_latestPlayerPositionsClient);
+        return new List<KeyValuePair<string, Vector3>>(_latestPlayerPositionsClient);
     }
 }
