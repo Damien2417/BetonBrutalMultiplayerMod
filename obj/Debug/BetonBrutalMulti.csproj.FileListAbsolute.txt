@@ -91,10 +91,13 @@ E:\Programmation\BetonBrutalMultiplayerMod\bin\Debug\Assembly-CSharp.dll
 E:\Programmation\BetonBrutalMultiplayerMod\bin\Debug\BepInEx.dll
 E:\Programmation\BetonBrutalMultiplayerMod\bin\Debug\LiteNetLib.dll
 E:\Programmation\BetonBrutalMultiplayerMod\bin\Debug\Newtonsoft.Json.dll
+E:\Programmation\BetonBrutalMultiplayerMod\bin\Debug\Unity.InputSystem.dll
 E:\Programmation\BetonBrutalMultiplayerMod\bin\Debug\UnityEngine.AnimationModule.dll
 E:\Programmation\BetonBrutalMultiplayerMod\bin\Debug\UnityEngine.AssetBundleModule.dll
 E:\Programmation\BetonBrutalMultiplayerMod\bin\Debug\UnityEngine.CoreModule.dll
 E:\Programmation\BetonBrutalMultiplayerMod\bin\Debug\UnityEngine.dll
+E:\Programmation\BetonBrutalMultiplayerMod\bin\Debug\UnityEngine.InputLegacyModule.dll
+E:\Programmation\BetonBrutalMultiplayerMod\bin\Debug\UnityEngine.InputModule.dll
 E:\Programmation\BetonBrutalMultiplayerMod\bin\Debug\UnityEngine.JSONSerializeModule.dll
 E:\Programmation\BetonBrutalMultiplayerMod\bin\Debug\UnityEngine.PhysicsModule.dll
 E:\Programmation\BetonBrutalMultiplayerMod\bin\Debug\UnityEngine.TextRenderingModule.dll

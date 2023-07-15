@@ -6,6 +6,9 @@ using System.Reflection;
 using UnityEngine;
 using UnityEngine.UI;
 using UnityEngine.UIElements;
+using UnityEngine.Windows;
+using UnityEngine.InputSystem;
+using System.Reflection.Emit;
 
 public static class Patcher
 {
@@ -137,19 +140,19 @@ public static class Patcher
     }
 
 
-    [HarmonyPatch(typeof(GameUI), "SwitchToScreen", new Type[] { typeof(UIScreen) })]
+    /*[HarmonyPatch(typeof(GameUI), "SwitchToScreen", new Type[] { typeof(UIScreen) })]
     public static class GameUI_SwitchToScreen_Patch
     {
         [HarmonyPostfix]
         public static void Postfix(GameUI __instance, UIScreen targetScreen)
         {
-            string screenName = targetScreen.Name;
-            if (screenName == "PauseMenu")
+            if (__instance.ActiveScreen.Name == "PauseMenu")
             {
                 if (GameUI_Start_Patch.connectionMenu != null)
                 {
                     GameUI_Start_Patch.ManageConnectionUI();
                 }
+
             }
             else // When we switch away from PauseMenu, we disable our menu
             {
@@ -159,7 +162,7 @@ public static class Patcher
                     GameUI_Start_Patch.disconnectionMenu.SetActive(false);
             }
 
-            if (screenName == "HUD")
+            if (__instance.ActiveScreen.Name == "HUD")
             {
                 if (leaderboardGO != null)
                 {
@@ -179,34 +182,47 @@ public static class Patcher
                 }
             }
         }
-    }
+    }*/
 
 
-    [HarmonyPatch(typeof(MainScreen), "OnEnter")]
-    public static class MainScreenPatch
+    [HarmonyPatch(typeof(MainScreen))]
+    [HarmonyPatch("OnEnter")]
+    public static class MainScreen_OnEnter_Patch
     {
-        public static void Postfix(MainScreen __instance)
+        static void Postfix(MainScreen __instance)
         {
-            //Création d'un bouton UIElements
-            UnityEngine.UIElements.Button myUnityButton = new UnityEngine.UIElements.Button();
-            myUnityButton.name = "MyUnityButton";
-            myUnityButton.text = "Mon Bouton Unity";
-
-            // Obtenez la propriété Screen via la réflexion
-            var screenProp = typeof(UIScreen).GetProperty("Screen", BindingFlags.NonPublic | BindingFlags.Instance);
-            var screen = (VisualElement)screenProp.GetValue(__instance);
-
-            // Ajout du bouton à l'écran
-            screen.Add(myUnityButton);
-
-            // Ajoutez un gestionnaire d'événements pour le bouton
-            myUnityButton.clicked += () =>
+            if (GameUI_Start_Patch.connectionMenu != null)
             {
-                Debug.Log("Mon Bouton Unity a été cliqué!");
-            };
+                GameUI_Start_Patch.ManageConnectionUI();
+            }
+            if (leaderboardGO != null)
+            {
+                leaderboardGO.SetActive(false);
+            }
         }
     }
 
+    [HarmonyPatch(typeof(HUDScreen))]
+    [HarmonyPatch("OnEnter")]
+    public static class HUDScreen_OnEnter_Patch
+    {
+        static void Postfix(HUDScreen __instance)
+        {
+            if (GameUI_Start_Patch.connectionMenu != null)
+                GameUI_Start_Patch.connectionMenu.SetActive(false);
+            if (GameUI_Start_Patch.disconnectionMenu != null)
+                GameUI_Start_Patch.disconnectionMenu.SetActive(false);
+            if (leaderboardGO != null)
+            {
+                leaderboardGO.SetActive(true);
+            }
+            else
+            {
+                CreateLeaderboardUI();
+                UpdateLeaderboard();
+            }
+        }
+    }
 
 
 
