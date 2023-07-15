@@ -79,7 +79,7 @@ public class Players
                 _players[playerName].transform.rotation = Quaternion.Euler(0, yRotation, 0);
 
                 // Find the head bone (B-head) and adjust its rotation.
-                Transform headBone = _players[playerName].transform.Find("DummyRig/root/B-hips/B-spine/B-chest/B-upperChest/B-neck/B-head");
+                Transform headBone = _players[playerName].transform.Find("mixamorig9:Hips/mixamorig9:Spine/mixamorig9:Spine1/mixamorig9:Spine2/mixamorig9:Neck");
                 if (headBone != null)
                 {
                     float headVerticalRotation = rotation.eulerAngles.x;
@@ -157,7 +157,7 @@ public class Players
             }
 
             RaycastHit hit;
-            bool isGrounded = Physics.Raycast(currentPosition, Vector3.down, out hit, 0.1f);
+            bool isGrounded = Physics.Raycast(currentPosition, Vector3.down, out hit, 0.3f);
 
             Animator animator = _players[playerName].GetComponent<Animator>();
             float speed = 0f;
@@ -179,26 +179,14 @@ public class Players
             else if (isGrounded)
             {
                 // Calculate the speed and direction based on the distance moved
-                Vector3 movementVector = (currentPosition - previousPosition).normalized;
-                float angle = Vector3.Angle(_players[playerName].transform.forward, movementVector);
-
-                float distanceMoved = Vector3.Distance(currentPosition, previousPosition);
+                Vector3 movementVector = (currentPosition - previousPosition);
+                float distanceMoved = movementVector.magnitude;
+                speed = (distanceMoved / Time.deltaTime)*50; // v = d/t
+                float angle = Vector3.Angle(_players[playerName].transform.forward, movementVector.normalized);
                 if (distanceMoved > 0.001f) // Use Mathf.Epsilon to account for floating-point inaccuracies
                 {
                     // The angle will be in the range [0, 180], where 0 is forward and 180 is backward.
                     direction = angle;
-                    if (isSprinting)
-                    {
-                        speed = 2.1f;
-                    }
-                    else if (isSneaking)
-                    {
-                        speed = 0.6f;
-                    }
-                    else
-                    {
-                        speed = 1.1f;
-                    }
                 }
                 animator.SetBool("Jump", false);
                 animator.SetBool("Fall", false);

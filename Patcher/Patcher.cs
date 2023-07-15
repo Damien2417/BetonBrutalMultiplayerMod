@@ -1,8 +1,12 @@
 ﻿using HarmonyLib;
+using System;
 using System.Collections;
 using System.Collections.Generic;
+using System.Reflection;
 using UnityEngine;
 using UnityEngine.UI;
+using UnityEngine.UIElements;
+
 public static class Patcher
 {
     private static GameObject leaderboardGO;
@@ -110,7 +114,7 @@ public static class Patcher
         for (int i = 0; i < topPlayers.Count; i++)
         {
             string playerName = topPlayers[i].Key;
-            float altitude = Mathf.Round(topPlayers[i].Value.y);
+            float altitude = Mathf.Floor(topPlayers[i].Value.y);
 
             playerDataList.Add(new PlayerData { playerName = playerName, altitude = altitude });
         }
@@ -133,13 +137,13 @@ public static class Patcher
     }
 
 
-    [HarmonyPatch(typeof(GameUI))]
-    [HarmonyPatch("SwitchToScreen")]
+    [HarmonyPatch(typeof(GameUI), "SwitchToScreen", new Type[] { typeof(UIScreen) })]
     public static class GameUI_SwitchToScreen_Patch
     {
         [HarmonyPostfix]
-        public static void Postfix(GameUI __instance, string screenName)
+        public static void Postfix(GameUI __instance, UIScreen targetScreen)
         {
+            string screenName = targetScreen.Name;
             if (screenName == "PauseMenu")
             {
                 if (GameUI_Start_Patch.connectionMenu != null)
@@ -177,6 +181,35 @@ public static class Patcher
         }
     }
 
+
+    [HarmonyPatch(typeof(MainScreen), "OnEnter")]
+    public static class MainScreenPatch
+    {
+        public static void Postfix(MainScreen __instance)
+        {
+            //Création d'un bouton UIElements
+            UnityEngine.UIElements.Button myUnityButton = new UnityEngine.UIElements.Button();
+            myUnityButton.name = "MyUnityButton";
+            myUnityButton.text = "Mon Bouton Unity";
+
+            // Obtenez la propriété Screen via la réflexion
+            var screenProp = typeof(UIScreen).GetProperty("Screen", BindingFlags.NonPublic | BindingFlags.Instance);
+            var screen = (VisualElement)screenProp.GetValue(__instance);
+
+            // Ajout du bouton à l'écran
+            screen.Add(myUnityButton);
+
+            // Ajoutez un gestionnaire d'événements pour le bouton
+            myUnityButton.clicked += () =>
+            {
+                Debug.Log("Mon Bouton Unity a été cliqué!");
+            };
+        }
+    }
+
+
+
+
     [HarmonyPatch(typeof(GameUI))]
     [HarmonyPatch("Start")] // Patch the Start method of GameUI
     public static class GameUI_Start_Patch
@@ -184,7 +217,7 @@ public static class Patcher
         public static GameObject canvasGO;
         public static GameObject connectionMenu;
         public static GameObject disconnectionMenu;
-        public static Button disconnectButton;
+        public static UnityEngine.UI.Button disconnectButton;
         public static GameObject leaderboardGO;
 
         [HarmonyPostfix]
@@ -218,10 +251,10 @@ public static class Patcher
             InputField nameInputField = AddInputFieldToUI(connectionMenu, "NameInputField", new Vector2(-10, -90), "Enter name...");
 
             // Add Connect Button
-            Button connectButton = AddButtonToUI(connectionMenu, "ConnectButton", new Vector2(-10, -170), "Connect");
+            UnityEngine.UI.Button connectButton = AddButtonToUI(connectionMenu, "ConnectButton", new Vector2(-10, -170), "Connect");
 
             // Add IsHost CheckBox
-            Toggle isHostToggle = AddToggleToUI(connectionMenu, "IsHostToggle", new Vector2(-10, -130), "Host");
+            UnityEngine.UI.Toggle isHostToggle = AddToggleToUI(connectionMenu, "IsHostToggle", new Vector2(-10, -130), "Host");
             RectTransform toggleRect = isHostToggle.GetComponent<RectTransform>();
             toggleRect.sizeDelta = new Vector2(70, 30);
             toggleRect.anchorMin = new Vector2(0.5f, 1);
@@ -300,7 +333,7 @@ public static class Patcher
             inputFieldRect.pivot = new Vector2(1, 1);
             inputFieldRect.anchoredPosition = anchoredPosition;
             inputFieldRect.sizeDelta = new Vector2(180, 30);
-            Image inputFieldImage = inputFieldGO.AddComponent<Image>();
+            UnityEngine.UI.Image inputFieldImage = inputFieldGO.AddComponent<UnityEngine.UI.Image>();
             inputFieldImage.color = new Color(1, 1, 1, 0.2f); // Make the input field's background white
 
             // Assign the Text component to the InputField
@@ -332,38 +365,38 @@ public static class Patcher
             return textComponent;
         }
 
-        public static Button AddButtonToUI(GameObject parentObject, string buttonName, Vector2 anchoredPosition, string buttonText)
+        public static UnityEngine.UI.Button AddButtonToUI(GameObject parentObject, string buttonName, Vector2 anchoredPosition, string buttonText)
         {
             GameObject buttonGO = new GameObject(buttonName);
             buttonGO.transform.parent = parentObject.transform;
 
-            Button button = buttonGO.AddComponent<Button>();
+            UnityEngine.UI.Button button = buttonGO.AddComponent<UnityEngine.UI.Button>();
             RectTransform buttonRect = buttonGO.AddComponent<RectTransform>();
             buttonRect.anchorMin = new Vector2(1, 1);
             buttonRect.anchorMax = new Vector2(1, 1);
             buttonRect.pivot = new Vector2(1, 1);
             buttonRect.anchoredPosition = anchoredPosition;
             buttonRect.sizeDelta = new Vector2(180, 30);
-            Image buttonImage = buttonGO.AddComponent<Image>();
+            UnityEngine.UI.Image buttonImage = buttonGO.AddComponent<UnityEngine.UI.Image>();
             buttonImage.color = new Color(1, 1, 1, 0.2f); // Make the button's background white
 
             Text buttonTextComponent = AddTextToUI(buttonGO, buttonText);
             return button;
         }
 
-        public static Toggle AddToggleToUI(GameObject parentObject, string toggleName, Vector2 anchoredPosition, string toggleText)
+        public static UnityEngine.UI.Toggle AddToggleToUI(GameObject parentObject, string toggleName, Vector2 anchoredPosition, string toggleText)
         {
             GameObject toggleGO = new GameObject(toggleName);
             toggleGO.transform.parent = parentObject.transform;
 
-            Toggle toggle = toggleGO.AddComponent<Toggle>();
+            UnityEngine.UI.Toggle toggle = toggleGO.AddComponent<UnityEngine.UI.Toggle>();
             RectTransform toggleRect = toggleGO.GetComponent<RectTransform>();
             toggleRect.anchorMin = new Vector2(1, 1);
             toggleRect.anchorMax = new Vector2(1, 1);
             toggleRect.pivot = new Vector2(1, 1);
             toggleRect.anchoredPosition = anchoredPosition;
             toggleRect.sizeDelta = new Vector2(180, 30);
-            Image toggleBackgroundImage = toggleGO.AddComponent<Image>();
+            UnityEngine.UI.Image toggleBackgroundImage = toggleGO.AddComponent<UnityEngine.UI.Image>();
             toggleBackgroundImage.color = new Color(1, 1, 1, 1); // Make the checkbox's background white
 
             // Add a child GameObject for the checkmark
